@@ -22,7 +22,7 @@ class Preprocessor():
 		for i in tqdm(range(len(Train_raw))):
 			content = Train_raw[i]
 			out_str = ''
-			content_cut = jieba.cut(content, cut_all = True)
+			content_cut = jieba.cut(content, cut_all = False)
 			for word in content_cut:
 				if word != '' and '\n':
 					out_str = out_str + ' ' + word
@@ -55,17 +55,17 @@ class Preprocessor():
 			dictionary = self.tokenizer.word_index
 			
 			#保存词典
-			file = config.dictionary_path + "/dictionary.txt"
+			file = config.dictionary_path + "dictionary.txt"
 			f = open(file,'w')
 			f.write(str(dictionary))
 			f.close()
 
-			sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'post')
+			sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'pre')
 
 		else:
 
 			#读取训练好的词典
-			file = config.dictionary_path + "/dictionary.txt"
+			file = config.dictionary_path + "dictionary.txt"
 			fr = open(file,'r')
 			dictionary = eval(fr.read())   #读取的str转换为字典
 			fr.close()
@@ -74,7 +74,7 @@ class Preprocessor():
 			self.tokenizer.word_index = dictionary
 			Train_sequence = self.tokenizer.texts_to_sequences(content)
 
-			sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'post')
+			sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'pre')
 
 		return sequence_pad
 
