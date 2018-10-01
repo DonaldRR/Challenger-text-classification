@@ -45,10 +45,24 @@ if __name__ == '__main__':
 	np.save(config.test_sequence_path, Test_sequence)
 	np.save(config.train_label_path, Train_label)
 	np.save(config.validation_label_path, Validation_label)
-        
-	model = TextClassifier()
+
+F1 = []
+for i in range(30):
+	model = TextClassifier(nn_type='cnn')
 	model.train(Train_sequence, Train_label, Validation_sequence, Validation_label)
-	ans = model.predict(Test_sequence)
-	print(ans)
+
+	valid_pred = model.predict(Validation_sequence)
+	y_pred = []
+	y_true = []
+	for i in range(len(label_names)):
+		y_pred.append(np.argmax(y_pred[i], axis=1))
+		y_true.append(np.argmax(Validation_label[i], axis=1))
+	f1 = model.evaluate(y_pred, y_true)
+	F1.append(f1)
+	print('### F1 score:{} ###'.format(f1))
+	print('### Avg F1:{} ###'.format(np.average(f1)))
+	np.save(F1)
+
+	model.save('cnn')
 
 	# clf = model.TextClassifier()
