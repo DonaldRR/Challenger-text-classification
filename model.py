@@ -6,6 +6,7 @@ import tensorflow.keras
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, Embedding, Activation, Input, Flatten, BatchNormalization, Conv1D, MaxPooling1D, Concatenate, LSTM, Dropout,MaxPool1D, Conv2D, MaxPooling2D, Lambda, AveragePooling2D
 from tensorflow.keras.models import load_model
+from tensorflow.keras import regularizers
 import numpy as np
 from sklearn import metrics
 from tensorflow import expand_dims
@@ -15,7 +16,7 @@ class TextClassifier():
 
 	def __init__(self, nn_type='lstm', model_path = None):
 		#读取词典
-		file = config.dictionary_path + "/dictionary.txt"
+		file = config.dictionary_path + "dictionary.txt"
 		fr = open(file,'r')
 		self.dictionary = eval(fr.read())   #读取的str转换为字典
 		fr.close()
@@ -74,8 +75,11 @@ class TextClassifier():
 							trainable=False)(input_nodes)
 
 		if self.nnType is 'lstm':
-			filter_fc1 = 128
-			lstm = LSTM(512)(a)
+			filter_fc1 = 64
+			lstm = LSTM(256, kernel_regularizer=regularizers.l1(0.01),
+						recurrent_regularizer=regularizers.l1(0.01),
+						bias_regularizer=regularizers.l1(0.01),
+						activity_regularizer=regularizers.l1(0.01))(a)
 			pool_ = Lambda(lambda x:expand_dims(x, axis=2))(lstm)
 			pool1 = MaxPool1D(pool_size=3)(pool_)
 			pool2 = MaxPool1D(pool_size=5)(pool_)

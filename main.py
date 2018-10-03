@@ -40,29 +40,41 @@ if __name__ == '__main__':
 		Train_label.append(p.preprocess_labels(Train_raw_data[name]))
 		Validation_label.append(p.preprocess_labels(Validation_raw_data[name]))
 
-	np.save(config.train_sequence_path, Train_sequence)
-	np.save(config.validation_sequence_path, Validation_sequence)
-	np.save(config.test_sequence_path, Test_sequence)
-	np.save(config.train_label_path, Train_label)
-	np.save(config.validation_label_path, Validation_label)
+	# np.save(config.train_sequence_path, Train_sequence)
+	# np.save(config.validation_sequence_path, Validation_sequence)
+	# np.save(config.test_sequence_path, Test_sequence)
+	# np.save(config.train_label_path, Train_label)
+	# np.save(config.validation_label_path, Validation_label)
+
+	idxs_to_remove = np.load('idxs_to_delete.npy')
+	Train_sequence = np.delete(Train_sequence, idxs_to_remove, axis=0)
+	Train_label = np.delete(Train_label, idxs_to_remove, axis=1)
+	idx_list = [i for i in range(len(Train_label))]
+	idx_list = np.random.shuffle(idx_list)
+	Train_sequence = np.squeeze(Train_sequence[idx_list,:], axis=0)
+	Train_label = np.squeeze(Train_label[:,idx_list,:], axis=1)
+
+	print('Train_seq shape:',Train_sequence.shape)
+	print('Train_label shape:',Train_label.shape)
+
 
 F1 = []
+model = TextClassifier()
 for i in range(30):
-	model = TextClassifier(nn_type='cnn')
 	model.train(Train_sequence, Train_label, Validation_sequence, Validation_label)
 
-	valid_pred = model.predict(Validation_sequence)
-	y_pred = []
-	y_true = []
-	for i in range(len(label_names)):
-		y_pred.append(np.argmax(y_pred[i], axis=1))
-		y_true.append(np.argmax(Validation_label[i], axis=1))
-	f1 = model.evaluate(y_pred, y_true)
-	F1.append(f1)
-	print('### F1 score:{} ###'.format(f1))
-	print('### Avg F1:{} ###'.format(np.average(f1)))
-	np.save(F1)
+	# valid_pred = model.predict(Validation_sequence)
+	# y_pred = []
+	# y_true = []
+	# for i in range(len(label_names)):
+	# 	y_pred.append(np.argmax(y_pred[i], axis=1))
+	# 	y_true.append(np.argmax(Validation_label[i], axis=1))
+	# f1 = model.evaluate(y_pred, y_true)
+	# F1.append(f1)
+	# print('### F1 score:{} ###'.format(f1))
+	# print('### Avg F1:{} ###'.format(np.average(f1)))
+	# np.save(F1)
 
-	model.save('cnn')
+	model.save('lstm')
 
 	# clf = model.TextClassifier()
