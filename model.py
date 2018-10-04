@@ -16,7 +16,7 @@ class TextClassifier():
 
 	def __init__(self, nn_type='lstm', model_path = None):
 		#读取词典
-		file = config.dictionary_path + "dictionary.txt"
+		file = config.dictionary_path + "/dictionary.txt"
 		fr = open(file,'r')
 		self.dictionary = eval(fr.read())   #读取的str转换为字典
 		fr.close()
@@ -226,7 +226,16 @@ class TextClassifier():
 		y_pred = self.model.predict(test_data)
 		return np.argmax(y_pred, axis = 0)
 
-	def evaluate(self, y_pred, y_true):
+	def evaluate(self, model, data, true_label, num_labels=20):
+
+		data_pred = model.predict(data)
+		y_pred = []
+		y_true = []
+
+		for i in range(num_labels):
+			y_pred.append(np.argmax(data_pred[i], axis=1))
+			y_true.append(np.argmax(true_label[i], axis=1))
+
 		f1 = []
 		for j in range(len(y_pred)):
 			f1.append(metrics.f1_score(y_true[j], y_pred[j], average = 'micro'))

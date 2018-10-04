@@ -6,7 +6,7 @@ from tqdm import *
 import config
 from tensorflow.keras.preprocessing.text import Tokenizer
 import tensorflow as tf
-
+import numpy as np
 
 class Preprocessor():
 	def __init__(self, dictionary = None):
@@ -78,7 +78,42 @@ class Preprocessor():
 
 		return sequence_pad
 
+	def removeData(self, trainData, trainLabel):
+		print('Starting removing ......')
+		trainData = np.array(trainData)
+		trainLabel = np.array(trainLabel)
+		print(trainData.shape)
+		print(trainLabel.shape)
+		num_train = trainData.shape[1]
 
+		rm_Idxs20 = [[3], [3], [3], [3], [1, 3],
+					 [3], [3], [3], [3], [3],
+					 [1, 3], [3], [3], [1, 3], [1, 3],
+					 [0, 1], [1, 3], [3], [1], [1, 3]]
 
-			
+		trans_matrix = []
+		for i in range(len(rm_Idxs20)):
+			tmp_list = [0] * 4
+			for j in range(len(rm_Idxs20[i])):
+				tmp_list[rm_Idxs20[i][j]] = 1
+			trans_matrix.append(tmp_list)
 
+		Idxs_candidate_to_remove = []
+
+		for i in tqdm(range(105000)):
+			if np.sum(np.sum(np.multiply(trainLabel[:, i, :], trans_matrix), axis=0)) == 20:
+				Idxs_candidate_to_remove.append(i)
+
+		trainData = np.delete(trainData, Idxs_candidate_to_remove, axis=0)
+		trainLabel = np.delete(trainLabel, Idxs_candidate_to_remove, axis=1)
+
+		print('Tuples removed.')
+		return trainData, trainLabel
+
+	def shuffle(self, trainData, trainLabel):
+		idx_list = [i for i in range(len(trainData))]
+		idx_list = np.random.shuffle(idx_list)
+		Train_sequence = np.squeeze(trainData[idx_list, :], axis=0)
+		Train_label = np.squeeze(trainLabel[:, idx_list], axis=1)
+
+		return Train_sequence, Train_label
