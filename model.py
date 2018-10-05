@@ -16,7 +16,7 @@ class TextClassifier():
 
     def __init__(self, output_nodes,nn_type='lstm', model_path = None):
         #读取词典
-        file = config.dictionary_path + "/dictionary.txt"
+        file = config.dictionary_path + "dictionary.txt"
         fr = open(file,'r')
         self.dictionary = eval(fr.read())   #读取的str转换为字典
         fr.close()
@@ -83,6 +83,7 @@ class TextClassifier():
             concat_pool = Concatenate(axis=1)([pool_, pool1, pool2])
             flatten = Flatten()(concat_pool)
 
+            output_finals = []
             if output_nodes == 2:
                 feature11 = Dense(filter_fc1, activation='relu')(flatten)
                 feature21 = Dense(filter_fc2, activation='relu')(feature11)
@@ -107,7 +108,7 @@ class TextClassifier():
                 dp3 = Dropout(0.3)(feature23)
                 output3 = Dense(4, activation='softmax')(dp3)
                 output_finals = [output1, output2, output3]
-            if output_nodes == 2:
+            if output_nodes == 4:
                 feature11 = Dense(filter_fc1, activation='relu')(flatten)
                 feature21 = Dense(filter_fc2, activation='relu')(feature11)
                 dp1 = Dropout(0.3)(feature21)

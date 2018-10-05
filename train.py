@@ -22,23 +22,23 @@ model6 = TextClassifier(len(config.class_group[5]),'lstm')
 F1 = []
 for i in range(30):
     # 训练模型
-    train_seq1, train_label1 = p.shuffle(Train_seq_set[0], Train_label_set[0])
-    model1.train(train_seq1, train_label1, Validation_seq, Validation_label[config.class_group[0]])
+    # train_seq1, train_label1 = p.shuffle(Train_seq_set[0], Train_label_set[0])
+    # model1.train(train_seq1, [train_label1[l] for l in range(len(config.class_group[0]))], Validation_seq, Validation_label[config.class_group[0]])
 
     train_seq2, train_label2 = p.shuffle(Train_seq_set[1], Train_label_set[1])
-    model2.train(train_seq2, train_label2, Validation_seq, Validation_label[config.class_group[1]])
+    model2.train(train_seq2, [train_label2[l] for l in range(len(config.class_group[1]))], Validation_seq, Validation_label[config.class_group[1]])
 
     train_seq3, train_label3 = p.shuffle(Train_seq_set[2], Train_label_set[2])
-    model1.train(train_seq1, train_label1, Validation_seq, Validation_label[config.class_group[2]])
+    model1.train(train_seq3, [train_label3[l] for l in range(len(config.class_group[2]))], Validation_seq, Validation_label[config.class_group[2]])
 
     train_seq4, train_label4 = p.shuffle(Train_seq_set[3], Train_label_set[3])
-    model1.train(train_seq1, train_label1, Validation_seq, Validation_label[config.class_group[3]])
+    model1.train(train_seq4, [train_label4[l] for l in range(len(config.class_group[3]))], Validation_seq, Validation_label[config.class_group[3]])
 
     train_seq5, train_label5 = p.shuffle(Train_seq_set[4], Train_label_set[4])
-    model1.train(train_seq1, train_label1, Validation_seq, Validation_label[config.class_group[4]])
+    model1.train(train_seq5, [train_label5[l] for l in range(len(config.class_group[4]))], Validation_seq, Validation_label[config.class_group[4]])
 
     train_seq6, train_label6 = p.shuffle(Train_seq_set[5], Train_label_set[5])
-    model1.train(train_seq1, train_label1, Validation_seq, Validation_label[config.class_group[5]])
+    model1.train(train_seq6, [train_label6[l] for l in range(len(config.class_group[5]))], Validation_seq, Validation_label[config.class_group[5]])
 
     # 保存模型
     model1.save('6lstm_1.npy')
