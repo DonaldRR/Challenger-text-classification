@@ -4,17 +4,21 @@
 import config
 import tensorflow.keras
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Embedding, Activation, Input, Flatten, BatchNormalization, Conv1D, MaxPooling1D, Concatenate, LSTM, Dropout,MaxPool1D, Conv2D, MaxPooling2D, Lambda, AveragePooling2D
+from tensorflow.keras.layers import BatchNormalization, SpatialDropout1D, Average, ReLU, Add, Reshape, Bidirectional,CuDNNLSTM, Dense, Embedding, Activation, Input, Flatten, BatchNormalization, Conv1D, MaxPooling1D, Concatenate, LSTM, Dropout,MaxPool1D, Conv2D, MaxPooling2D, Lambda, AveragePooling2D
 from tensorflow.keras.models import load_model
+from tensorflow.keras.activations import relu
 from tensorflow.keras import regularizers
+from tensorflow.keras.optimizers import SGD, Adam
 import numpy as np
 from sklearn import metrics
-from tensorflow import expand_dims
+from tensorflow import expand_dims, squeeze
+import tensorflow as tf
+from CapsuleLayers import Capsule
 
 
 class TextClassifier():
 
-    def __init__(self, output_nodes,nn_type='lstm', model_path = None):
+    def __init__(self, nn_type='lstm', model_path = None):
         #读取词典
         file = config.dictionary_path + "dictionary.txt"
         fr = open(file,'r')
@@ -24,10 +28,12 @@ class TextClassifier():
         #读取预训练的wordembedding
         self.embedding_matrix = self.load_embedding_weight()
 
+        self.clusters_meas = np.load('clusters_means.npy')
+
         #初始化模型
         self.nnType = nn_type
         if model_path == None:
-            self.model = self.ModelCreator(config.input_nodes, output_nodes)
+            self.model = self.ModelCreator(config.input_nodes)
         else:
             self.model = load_model(model_path)
 
@@ -63,77 +69,102 @@ class TextClassifier():
 
         return embedding_matrix
 
-    def ModelCreator(self, input_node, output_nodes):
-        input_nodes = Input(shape = (input_node,))
-        a = Embedding(len(self.dictionary)+1,output_dim=300,  # 词向量维度
+    def ModelCreator(self, input_nodes):
+        input_ = Input(shape = (input_nodes,))
+
+        embd_seq = Embedding(len(self.dictionary)+1,output_dim=300,  # 词向量维度
 							weights=[self.embedding_matrix],
 							input_length=config.sequence_max_len,  # 文本或者句子截断长度
-							trainable=False)(input_nodes)
+							trainable=False)(input_)
 
-        filter_fc1 = 64
-        filter_fc2 = 32
-        if self.nnType is 'lstm':
-            lstm = LSTM(256, kernel_regularizer=regularizers.l1(0.01),
-						recurrent_regularizer=regularizers.l1(0.01),
-						bias_regularizer=regularizers.l1(0.01),
-						activity_regularizer=regularizers.l1(0.01))(a)
-            pool_ = Lambda(lambda x:expand_dims(x, axis=2))(lstm)
-            pool1 = MaxPool1D(pool_size=3)(pool_)
-            pool2 = MaxPool1D(pool_size=5)(pool_)
-            concat_pool = Concatenate(axis=1)([pool_, pool1, pool2])
-            flatten = Flatten()(concat_pool)
+        # embd_seq_1 = Lambda(lambda x:x[:,:198])(embd_seq)
+        # embd_seq_2 = Lambda(lambda x: x[:,198:2*198])(embd_seq)
+        # embd_seq_3 = Lambda(lambda x: x[:,2*198:])(embd_seq)
+        # embd_seq_ = Average()([embd_seq_1, embd_seq_2, embd_seq_3])
 
-            output_finals = []
-            if output_nodes == 2:
-                feature11 = Dense(filter_fc1, activation='relu')(flatten)
-                feature21 = Dense(filter_fc2, activation='relu')(feature11)
-                dp1 = Dropout(0.3)(feature21)
-                output1 = Dense(4, activation='softmax')(dp1)
-                feature12 = Dense(filter_fc1, activation='relu')(flatten)
-                feature22 = Dense(filter_fc2, activation='relu')(feature12)
-                dp2 = Dropout(0.3)(feature22)
-                output2 = Dense(4, activation='softmax')(dp2)
-                output_finals = [output1, output2]
-            if output_nodes == 3:
-                feature11 = Dense(filter_fc1, activation='relu')(flatten)
-                feature21 = Dense(filter_fc2, activation='relu')(feature11)
-                dp1 = Dropout(0.3)(feature21)
-                output1 = Dense(4, activation='softmax')(dp1)
-                feature12 = Dense(filter_fc1, activation='relu')(flatten)
-                feature22 = Dense(filter_fc2, activation='relu')(feature12)
-                dp2 = Dropout(0.3)(feature22)
-                output2 = Dense(4, activation='softmax')(dp2)
-                feature13 = Dense(filter_fc1, activation='relu')(flatten)
-                feature23 = Dense(filter_fc2, activation='relu')(feature13)
-                dp3 = Dropout(0.3)(feature23)
-                output3 = Dense(4, activation='softmax')(dp3)
-                output_finals = [output1, output2, output3]
-            if output_nodes == 4:
-                feature11 = Dense(filter_fc1, activation='relu')(flatten)
-                feature21 = Dense(filter_fc2, activation='relu')(feature11)
-                dp1 = Dropout(0.3)(feature21)
-                output1 = Dense(4, activation='softmax')(dp1)
-                feature12 = Dense(filter_fc1, activation='relu')(flatten)
-                feature22 = Dense(filter_fc2, activation='relu')(feature12)
-                dp2 = Dropout(0.3)(feature22)
-                output2 = Dense(4, activation='softmax')(dp2)
-                feature13 = Dense(filter_fc1, activation='relu')(flatten)
-                feature23 = Dense(filter_fc2, activation='relu')(feature13)
-                dp3 = Dropout(0.3)(feature23)
-                output3 = Dense(4, activation='softmax')(dp3)
-                feature14 = Dense(filter_fc1, activation='relu')(flatten)
-                feature24 = Dense(filter_fc2, activation='relu')(feature14)
-                dp4 = Dropout(0.3)(feature24)
-                output4 = Dense(4, activation='softmax')(dp4)
-                output_finals = [output1, output2, output3, output4]
+        # sdp = SpatialDropout1D(0.3)(embd_seq)
 
-        model = Model(inputs=input_nodes, outputs=output_finals, name='base')
+        lstm = Bidirectional(CuDNNLSTM(256))(embd_seq)
+        lstm_ = Lambda(lambda x: expand_dims(x, axis=1))(lstm)
+        capsules_list = []
+        # bn0_1 = BatchNormalization()(lstm)
+        # act0_1 = ReLU()(bn0_1)
+        # expd = Lambda(lambda x: expand_dims(x, axis=2))(act0_1)
+        # conv0_1 = Conv1D(64, 3, 1, 'same')(expd)
+        # bn0_2 = BatchNormalization()(conv0_1)
+        # act0_2 = ReLU()(bn0_2)
+        # conv0_2 = Conv1D(64, 3, 1, 'same')(act0_2)
+
+        #block1
+        pool1_list = []
+        bn1_1_list = []
+        act1_1_list = []
+        conv1_1_list = []
+        bn1_2_list = []
+        act1_2_list = []
+        conv1_2_list = []
+        add1_list = []
+
+        #block2
+        pool2_list = []
+        bn2_1_list = []
+        act2_1_list = []
+        conv2_1_list = []
+        bn2_2_list = []
+        act2_2_list = []
+        conv2_2_list = []
+        add2_list = []
+
+
+        pool7_list = []
+        flat_list = []
+
+        fc1_list = []
+        fc2_list = []
+        dp1_list = []
+        dp2_list = []
+        outputs_list = []
+
+        for i in range(20):
+            capsules_list.append(Capsule(10, 32, 5, True)(lstm_))
+            # # block1
+            # pool1_list.append(MaxPool1D(2)(conv0_2))
+            # # bn1_1_list.append(BatchNormalization()(pool1_list[i]))
+            # act1_1_list.append(ReLU()(pool1_list[i]))
+            # conv1_1_list.append(Conv1D(64, 3, 1, 'same')(act1_1_list[i]))
+            # # bn1_2_list.append(BatchNormalization()(conv1_1_list[i]))
+            # act1_2_list.append(ReLU()(conv1_1_list[i]))
+            # conv1_2_list.append(Conv1D(64, 3, 1, 'same')(act1_2_list[i]))
+            # add1_list.append(Add()([pool1_list[i], conv1_2_list[i]]))
+            #
+            # # block2
+            # pool2_list.append(MaxPool1D(2)(add1_list[i]))
+            # # bn2_1_list.append(BatchNormalization()(pool2_list[i]))
+            # act2_1_list.append(ReLU()(pool2_list[i]))
+            # conv2_1_list.append(Conv1D(64, 3, 1, 'same')(act2_1_list[i]))
+            # # bn2_2_list.append(BatchNormalization()(conv2_1_list[i]))
+            # act2_2_list.append(ReLU()(conv2_1_list[i]))
+            # conv2_2_list.append(Conv1D(64, 3, 1, 'same')(act2_2_list[i]))
+            # add2_list.append(Add()([pool2_list[i], conv2_2_list[i]]))
+            #
+            # pool7_list.append(MaxPool1D(2)(add2_list[i]))
+            flat_list.append(Flatten()(capsules_list[i]))
+
+            fc1_list.append(Dense(64, activation='relu')(flat_list[i]))
+            dp1_list.append(Dropout(0.4)(fc1_list[i]))
+            fc2_list.append(Dense(64, activation='relu')(dp1_list[i]))
+            dp2_list.append(Dropout(0.4)(fc2_list[i]))
+            outputs_list.append(Dense(4, activation='softmax')(dp2_list[i]))
+
+        model = Model(inputs=input_, outputs=outputs_list, name='base')
         print(model.summary())
         return model
 
     def train(self, train_data, train_label, val_data = None, val_label = None):
-        self.model.compile(optimizer='sgd', loss='binary_crossentropy', metrics=['categorical_accuracy'])
-        self.model.fit(train_data, train_label, epochs=config.epochs, batch_size = 64, validation_data = [val_data, val_label])
+        sgd = SGD(lr=0.004, decay=0.001)
+        adam = Adam(lr=0.001, decay=0.05)
+        self.model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+        self.model.fit(train_data, train_label, epochs=config.epochs, batch_size=64, validation_data=[val_data, val_label])
 
     def save(self, model_name):
         save_path = config.model_save_path + "/" + model_name

@@ -8,10 +8,65 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 import tensorflow as tf
 import numpy as np
 from copy import copy
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
 class Preprocessor():
     def __init__(self, dictionary = None):
         self.tokenizer = Tokenizer()
+
+    def remove_stop_words(self, content, tags):
+
+        f = open(config.stopwords_path)
+        stop_words = f.readlines()
+        stop_words = [t[:-1] for t in stop_words]
+
+        removed_stop_content = []
+        removed_stop_content_tags = []
+        for i in tqdm(range(len(content))):
+            tmp_content = []
+            tmp_content_tags = []
+            for j in range(len(content[i])):
+                if content[i][j] not in stop_words:
+                    tmp_content.append(content[i][j])
+                    tmp_content_tags.append(tags[i][j])
+            removed_stop_content.append(tmp_content)
+            removed_stop_content_tags.append(tmp_content_tags)
+
+        return removed_stop_content, removed_stop_content_tags
+
+    def divide_content_tag(self, content):
+        new_content = []
+        new_content_tag = []
+        for i in tqdm(range(len(content))):
+            l = content[i].replace('\n', '')\
+                .replace(' ', '')\
+                .replace('#', '')\
+                .replace('\u3000', '')\
+                .split(',')
+            new_line = []
+            new_tag = []
+            for t in l:
+                word_tag = t.split('/')
+                if len(word_tag) == 2 and word_tag[1].encode('UTF-8').isalpha():
+                    new_line.append(word_tag[0])
+                    new_tag.append(word_tag[1])
+            new_content.append(new_line)
+            new_content_tag.append(new_tag)
+
+        return new_content, new_content_tag
+
+    def encode_tag(self, tags):
+        # Return unique word tags
+        unique_tags = []
+        for t in tags:
+            unique_tags += t
+        unique_tags = list(set(unique_tags))
+
+        # Encoding tags
+        enc = LabelEncoder()
+        enc.fit(unique_tags)
+
+        return [enc.transform(tags[i]) for i in range(len(tags))]
 
     def preprocess_content(self, Train_raw):
         #预处理文本文件，分词，去停词，然后返回相应的内容
@@ -21,7 +76,7 @@ class Preprocessor():
         for i in tqdm(range(len(Train_raw))):
             content = Train_raw[i]
             out_str = ''
-            content_cut = jieba.cut(content, cut_all = False)
+            content_cut = jieba.cut(content, cut_all = True)
             for word in content_cut:
                 if word != '' and '\n':
                     out_str = out_str + ' ' + word
@@ -39,13 +94,13 @@ class Preprocessor():
         label_onehot = tf.keras.utils.to_categorical(label)
         return label_onehot
 
-    def preprocess_text(self,  content, train_flag = True):
+    def preprocess_text(self,  content, tags=None, tag_flag=False, train_flag = True):
         #将文本转化为数字，content是分词完了之后的句子，有他的长度
         if train_flag == True:
             #如果是训练的时候，则不会读取,会对文本进行拟合
+            print("Constructing Dictionary ...")
             self.tokenizer.fit_on_texts(content)
             Train_sequence = self.tokenizer.texts_to_sequences(content)
-            print("序列化完成，正在保存词典")
             dictionary = self.tokenizer.word_index
 
             #保存词典
@@ -67,7 +122,12 @@ class Preprocessor():
             Train_sequence = self.tokenizer.texts_to_sequences(content)
 
             sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'pre')
-        return sequence_pad
+
+        tags_pad = []
+        if tag_flag:
+            tags_pad = tf.keras.preprocessing.sequence.pad_sequences(tags, maxlen=config.sequence_max_len, value=0., padding='pre')
+
+        return sequence_pad, tags_pad
 
     def removeData(self, trainData, trainLabel):
         print('Starting removing ......')
@@ -106,7 +166,7 @@ class Preprocessor():
         Train_label = np.squeeze(trainLabel[:, idx_list], axis=1)
         return Train_sequence, Train_label
 
-    def replicate_data(self, trainData, trainLabel):
+    def replicate_data(self, trainData, trainLabel, trainTags=[]):
         trainData = np.array(trainData)
         trainLabel = np.array(trainLabel)
         num_train = trainLabel.shape[1]
@@ -150,9 +210,11 @@ class Preprocessor():
         # Generate replicate data
         replicates_train_datas = []
         replicates_train_labels = []
+        replicates_train_tags = []
         for g in range(num_groups):
             replicates_Train_label = copy(trainLabel)[config.class_group[g]]
             replicates_Train_seq = copy(trainData)
+            replicates_train_tag = copy(trainTags)
             print("\nReplicating {}'th data set ...".format(g+1))
             for i in tqdm(range(num_train)):
                 if label_replicate_counts[g][i] > 1:
@@ -161,8 +223,10 @@ class Preprocessor():
                                                              [[t] * num_replicate for t in
                                                               trainLabel[config.class_group[g], i, :]]), axis=1)
                     replicates_Train_seq = np.concatenate((replicates_Train_seq, [trainData[i, :]] * num_replicate), axis=0)
+                    replicates_train_tag = np.concatenate((replicates_train_tag, [trainTags[i, :]] * num_replicate), axis=0)
             replicates_train_datas.append(replicates_Train_seq)
             replicates_train_labels.append(replicates_Train_label)
+            replicates_train_tags.append(replicates_train_tag)
 
-        return replicates_train_datas, replicates_train_labels
+        return replicates_train_datas, replicates_train_labels, replicates_train_tags
 
