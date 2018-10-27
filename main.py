@@ -53,6 +53,7 @@ if __name__ == '__main__':
     # test_content, test_content_tags = p.preprocess_text(test_content, test_content_tags,
     #                                                     train_flag=False)
 
+
     print("Preprocessing Labels ...")
     # #读取所有列标签的名称
     label_names = Train_raw_data.keys().tolist()
@@ -68,6 +69,7 @@ if __name__ == '__main__':
     for name in label_names:
         Train_label.append(p.preprocess_labels(Train_raw_data[name]))
         Validation_label.append(p.preprocess_labels(Validation_raw_data[name]))
+
 
     # 数据剪裁
     # Train_sequence, Train_label = p.removeData(Train_sequence, Train_label)

@@ -109,7 +109,7 @@ class Preprocessor():
             f.write(str(dictionary))
             f.close()
 
-            sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'pre')
+            sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'post')
         else:
             #读取训练好的词典
             file = config.dictionary_path + "dictionary.txt"
@@ -121,7 +121,7 @@ class Preprocessor():
             self.tokenizer.word_index = dictionary
             Train_sequence = self.tokenizer.texts_to_sequences(content)
 
-            sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'pre')
+            sequence_pad = tf.keras.preprocessing.sequence.pad_sequences(Train_sequence, maxlen=config.sequence_max_len,value=0.0, padding = 'post')
 
         tags_pad = []
         if tag_flag:

@@ -4,7 +4,7 @@
 import config
 import tensorflow.keras
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import BatchNormalization, SpatialDropout1D, Average, ReLU, Add, Reshape, Bidirectional,CuDNNLSTM, Dense, Embedding, Activation, Input, Flatten, BatchNormalization, Conv1D, MaxPooling1D, Concatenate, LSTM, Dropout,MaxPool1D, Conv2D, MaxPooling2D, Lambda, AveragePooling2D
+from tensorflow.keras.layers import CuDNNGRU, multiply, Permute, RepeatVector, BatchNormalization, SpatialDropout1D, Average, ReLU, Add, Reshape, Bidirectional,CuDNNLSTM, Dense, Embedding, Activation, Input, Flatten, BatchNormalization, Conv1D, MaxPooling1D, Concatenate, LSTM, Dropout,MaxPool1D, Conv2D, MaxPooling2D, Lambda, AveragePooling2D
 from tensorflow.keras.models import load_model
 from tensorflow.keras.activations import relu
 from tensorflow.keras import regularizers
@@ -14,11 +14,98 @@ from sklearn import metrics
 from tensorflow import expand_dims, squeeze
 import tensorflow as tf
 from CapsuleLayers import Capsule
+import tensorflow.keras.backend as K
 
+from keras import backend as K
+
+
+def mcor(y_true, y_pred):
+    # matthews_correlation
+    y_pred_pos = K.round(K.clip(y_pred, 0, 1))
+    y_pred_neg = 1 - y_pred_pos
+
+    y_pos = K.round(K.clip(y_true, 0, 1))
+    y_neg = 1 - y_pos
+
+    tp = K.sum(y_pos * y_pred_pos)
+    tn = K.sum(y_neg * y_pred_neg)
+
+    fp = K.sum(y_neg * y_pred_pos)
+    fn = K.sum(y_pos * y_pred_neg)
+
+    numerator = (tp * tn - fp * fn)
+    denominator = K.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+
+    return numerator / (denominator + K.epsilon())
+
+
+def precision(y_true, y_pred):
+    """Precision metric.
+
+    Only computes a batch-wise average of precision.
+
+    Computes the precision, a metric for multi-label classification of
+    how many selected items are relevant.
+    """
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    return precision
+
+
+def recall(y_true, y_pred):
+    """Recall metric.
+
+    Only computes a batch-wise average of recall.
+
+    Computes the recall, a metric for multi-label classification of
+    how many relevant items are selected.
+    """
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+
+def f1(y_true, y_pred):
+    def recall(y_true, y_pred):
+        """Recall metric.
+
+        Only computes a batch-wise average of recall.
+
+        Computes the recall, a metric for multi-label classification of
+        how many relevant items are selected.
+        """
+        true_positives = K.sum(y_true * y_pred, axis=0)
+        # true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        possible_positives = K.sum(y_true, axis=0)
+        # possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+        recall = true_positives / (possible_positives + K.epsilon())
+        return recall
+
+    def precision(y_true, y_pred):
+        """Precision metric.
+
+        Only computes a batch-wise average of precision.
+
+        Computes the precision, a metric for multi-label classification of
+        how many selected items are relevant.
+        """
+        true_positives = K.sum(y_true * y_pred, axis=0)
+        # true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = K.sum(y_pred, axis=0)
+        # predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + K.epsilon())
+        return precision
+
+    y_pred = tf.one_hot(tf.argmax(y_pred, axis=1), 4)
+    precision = precision(y_true, y_pred)
+    recall = recall(y_true, y_pred)
+    return K.mean(2 * ((precision * recall) / (precision + recall + K.epsilon())))
 
 class TextClassifier():
 
-    def __init__(self, nn_type='lstm', model_path = None):
+    def __init__(self, nn_type='lstm', sample_weights=None ,model_path = None):
         #读取词典
         file = config.dictionary_path + "dictionary.txt"
         fr = open(file,'r')
@@ -31,6 +118,8 @@ class TextClassifier():
         self.clusters_meas = np.load('clusters_means.npy')
 
         #初始化模型
+        self.sample_weights = sample_weights
+
         self.nnType = nn_type
         if model_path == None:
             self.model = self.ModelCreator(config.input_nodes)
@@ -77,94 +166,28 @@ class TextClassifier():
 							input_length=config.sequence_max_len,  # 文本或者句子截断长度
 							trainable=False)(input_)
 
-        # embd_seq_1 = Lambda(lambda x:x[:,:198])(embd_seq)
-        # embd_seq_2 = Lambda(lambda x: x[:,198:2*198])(embd_seq)
-        # embd_seq_3 = Lambda(lambda x: x[:,2*198:])(embd_seq)
-        # embd_seq_ = Average()([embd_seq_1, embd_seq_2, embd_seq_3])
-
-        # sdp = SpatialDropout1D(0.3)(embd_seq)
-
-        lstm = Bidirectional(CuDNNLSTM(256))(embd_seq)
-        lstm_ = Lambda(lambda x: expand_dims(x, axis=1))(lstm)
-        capsules_list = []
-        # bn0_1 = BatchNormalization()(lstm)
-        # act0_1 = ReLU()(bn0_1)
-        # expd = Lambda(lambda x: expand_dims(x, axis=2))(act0_1)
-        # conv0_1 = Conv1D(64, 3, 1, 'same')(expd)
-        # bn0_2 = BatchNormalization()(conv0_1)
-        # act0_2 = ReLU()(bn0_2)
-        # conv0_2 = Conv1D(64, 3, 1, 'same')(act0_2)
-
-        #block1
-        pool1_list = []
-        bn1_1_list = []
-        act1_1_list = []
-        conv1_1_list = []
-        bn1_2_list = []
-        act1_2_list = []
-        conv1_2_list = []
-        add1_list = []
-
-        #block2
-        pool2_list = []
-        bn2_1_list = []
-        act2_1_list = []
-        conv2_1_list = []
-        bn2_2_list = []
-        act2_2_list = []
-        conv2_2_list = []
-        add2_list = []
-
-
-        pool7_list = []
-        flat_list = []
-
-        fc1_list = []
-        fc2_list = []
-        dp1_list = []
-        dp2_list = []
         outputs_list = []
 
         for i in range(20):
-            capsules_list.append(Capsule(10, 32, 5, True)(lstm_))
-            # # block1
-            # pool1_list.append(MaxPool1D(2)(conv0_2))
-            # # bn1_1_list.append(BatchNormalization()(pool1_list[i]))
-            # act1_1_list.append(ReLU()(pool1_list[i]))
-            # conv1_1_list.append(Conv1D(64, 3, 1, 'same')(act1_1_list[i]))
-            # # bn1_2_list.append(BatchNormalization()(conv1_1_list[i]))
-            # act1_2_list.append(ReLU()(conv1_1_list[i]))
-            # conv1_2_list.append(Conv1D(64, 3, 1, 'same')(act1_2_list[i]))
-            # add1_list.append(Add()([pool1_list[i], conv1_2_list[i]]))
-            #
-            # # block2
-            # pool2_list.append(MaxPool1D(2)(add1_list[i]))
-            # # bn2_1_list.append(BatchNormalization()(pool2_list[i]))
-            # act2_1_list.append(ReLU()(pool2_list[i]))
-            # conv2_1_list.append(Conv1D(64, 3, 1, 'same')(act2_1_list[i]))
-            # # bn2_2_list.append(BatchNormalization()(conv2_1_list[i]))
-            # act2_2_list.append(ReLU()(conv2_1_list[i]))
-            # conv2_2_list.append(Conv1D(64, 3, 1, 'same')(act2_2_list[i]))
-            # add2_list.append(Add()([pool2_list[i], conv2_2_list[i]]))
-            #
-            # pool7_list.append(MaxPool1D(2)(add2_list[i]))
-            flat_list.append(Flatten()(capsules_list[i]))
+            gru = Bidirectional(CuDNNGRU(128))(embd_seq)
+            expd = Lambda(lambda x: expand_dims(x, axis=1))(gru)
+            capsule = Capsule(num_capsule=10, dim_capsule=16, routings=5, share_weights=True)(expd)
+            fl = Flatten()(capsule)
+            fc1 = Dense(64)(fl)
+            dp = Dropout(0.5)(fc1)
+            fc_final = Dense(4, activation='softmax')(dp)
 
-            fc1_list.append(Dense(64, activation='relu')(flat_list[i]))
-            dp1_list.append(Dropout(0.4)(fc1_list[i]))
-            fc2_list.append(Dense(64, activation='relu')(dp1_list[i]))
-            dp2_list.append(Dropout(0.4)(fc2_list[i]))
-            outputs_list.append(Dense(4, activation='softmax')(dp2_list[i]))
+            outputs_list.append(fc_final)
 
         model = Model(inputs=input_, outputs=outputs_list, name='base')
         print(model.summary())
         return model
 
     def train(self, train_data, train_label, val_data = None, val_label = None):
-        sgd = SGD(lr=0.004, decay=0.001)
-        adam = Adam(lr=0.001, decay=0.05)
-        self.model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-        self.model.fit(train_data, train_label, epochs=config.epochs, batch_size=64, validation_data=[val_data, val_label])
+        sgd = SGD(lr=0.002, decay=0.001)
+        adam = Adam(lr=0.0001)
+        self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=[f1, 'categorical_accuracy'])
+        self.model.fit(train_data, train_label, epochs=config.epochs, batch_size=128, validation_data=[val_data, val_label], sample_weight = self.sample_weights)
 
     def save(self, model_name):
         save_path = config.model_save_path + "/" + model_name
@@ -187,6 +210,3 @@ class TextClassifier():
         for j in range(len(y_pred)):
             f1.append(metrics.f1_score(y_true[j], y_pred[j], average = 'micro'))
         return f1
-
-		
-
