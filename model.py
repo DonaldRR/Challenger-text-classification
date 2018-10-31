@@ -128,6 +128,7 @@ class TextClassifier():
 
     def load_embedding_weight(self):
 
+
         f=open(config.word_embedding_path,"r",encoding="utf-8")
         ## 获取词向量的维度,l表示单词数，w为某个单词转化为词向量后的维度,注意，部分预训练好的词向量的第一行并不是该词向量的维度
         l,w=f.readline().split()
@@ -165,18 +166,15 @@ class TextClassifier():
 							weights=[self.embedding_matrix],
 							input_length=config.sequence_max_len,  # 文本或者句子截断长度
 							trainable=False)(input_)
-
-        outputs_list = []
-
+        outputs_list= []
         for i in range(20):
             gru = Bidirectional(CuDNNGRU(128))(embd_seq)
             expd = Lambda(lambda x: expand_dims(x, axis=1))(gru)
-            capsule = Capsule(num_capsule=10, dim_capsule=16, routings=5, share_weights=True)(expd)
-            fl = Flatten()(capsule)
+            capsule_1 = Capsule(10,16,5,True)(expd)
+            fl = Flatten()(capsule_1)
             fc1 = Dense(64)(fl)
             dp = Dropout(0.5)(fc1)
             fc_final = Dense(4, activation='softmax')(dp)
-
             outputs_list.append(fc_final)
 
         model = Model(inputs=input_, outputs=outputs_list, name='base')
@@ -184,10 +182,10 @@ class TextClassifier():
         return model
 
     def train(self, train_data, train_label, val_data = None, val_label = None):
-        sgd = SGD(lr=0.002, decay=0.001)
+        # sgd = SGD(lr=0.00005, decay=0.001)
         adam = Adam(lr=0.0001)
         self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=[f1, 'categorical_accuracy'])
-        self.model.fit(train_data, train_label, epochs=config.epochs, batch_size=128, validation_data=[val_data, val_label], sample_weight = self.sample_weights)
+        self.model.fit(train_data, train_label, epochs=config.epochs, batch_size=64, validation_data=[val_data, val_label], sample_weight = self.sample_weights)
 
     def save(self, model_name):
         save_path = config.model_save_path + "/" + model_name
@@ -208,5 +206,5 @@ class TextClassifier():
 
         f1 = []
         for j in range(len(y_pred)):
-            f1.append(metrics.f1_score(y_true[j], y_pred[j], average = 'micro'))
+            f1.append(metrics.f1_score(y_true[j], y_pred[j], average = 'macro'))
         return f1
