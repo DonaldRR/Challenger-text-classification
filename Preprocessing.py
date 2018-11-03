@@ -14,14 +14,19 @@ class Preprocessor():
     def __init__(self, dictionary = None):
         self.tokenizer = Tokenizer()
 
-    def remove_stop_words(self, content, tags):
+    def stopwordslist(filepath):
+        stopwords = [line.strip() for line in open(filepath, 'r', encoding='utf-8').readlines()]
+        return stopwords
+
+    def remove_stop_words(self, content, bool_tags=False, tags=None):
 
         f = open(config.stopwords_path)
         stop_words = f.readlines()
         stop_words = [t[:-1] for t in stop_words]
 
         removed_stop_content = []
-        removed_stop_content_tags = []
+        if bool_tags:
+            removed_stop_content_tags = []
         for i in tqdm(range(len(content))):
             tmp_content = []
             tmp_content_tags = []
@@ -30,9 +35,13 @@ class Preprocessor():
                     tmp_content.append(content[i][j])
                     tmp_content_tags.append(tags[i][j])
             removed_stop_content.append(tmp_content)
-            removed_stop_content_tags.append(tmp_content_tags)
+            if bool_tags:
+                removed_stop_content_tags.append(tmp_content_tags)
 
-        return removed_stop_content, removed_stop_content_tags
+        if bool_tags:
+            return removed_stop_content, removed_stop_content_tags
+
+        return removed_stop_content
 
     def divide_content_tag(self, content):
         new_content = []
@@ -70,8 +79,9 @@ class Preprocessor():
 
     def preprocess_content(self, Train_raw):
         #预处理文本文件，分词，去停词，然后返回相应的内容
-        #  filepath = config.stopwords_path
-        #  stopwords = stopwordslist(filepath)
+        filepath = config.stopwords_path
+        self.stopwords = [line.strip() for line in open(filepath, 'r', encoding='utf-8').readlines()]
+
         content_all = []
         for i in tqdm(range(len(Train_raw))):
             content = Train_raw[i]
