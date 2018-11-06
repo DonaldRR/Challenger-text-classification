@@ -20,17 +20,19 @@ test_data_predict_out_path = "submission"
 # Stop words
 stopwords_path = "stop_words_zh.txt"
 # Parameters
-sequence_max_len = 400
+sequence_max_len = 1200
 input_nodes = 400
-epochs = 1
+epochs = 20
 # Dictionary
 dictionary_path = ""
 # Embedding
+# word_embedding_path = 'word2vec/sgns.weibo.bigram'
 word_embedding_path = '/home/donald/datasets/ChallengerText_DS/wordVec'
+embedding_weights_path = 'embedding_weights.npy'
 # Preprocessed Data
-train_sequence_path = 'preprocessed_data/train_seq.npy'
-validation_sequence_path = 'preprocessed_data/validation_seq.npy'
-test_sequence_path = 'preprocessed_data/test_seq.npy'
+train_sequence_path = 'preprocessed_data/train.npy'
+validation_sequence_path = 'preprocessed_data/validation.npy'
+test_sequence_path = 'preprocessed_data/test.npy'
 train_label_path = 'preprocessed_data/train_label.npy'
 validation_label_path = 'preprocessed_data/validation_label.npy'
 train_tags_path = 'preprocessed_data/train_tags.npy'
