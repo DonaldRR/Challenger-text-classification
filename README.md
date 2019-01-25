@@ -11,8 +11,8 @@ numpy
 ## Run
 Run under shell to preprocess data and train.
 
-'''
+`
 python main.py
-'''
+`
 
 Also, you can train on jupyter notebook.
